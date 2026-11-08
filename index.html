@@ -23,12 +23,6 @@ nav input:focus{border-color:var(--acc)}
 .player-box{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 20px 40px #0008}
 .player-box iframe,.player-box video{width:100%;height:100%;border:0;display:block}
 
-/* Player Custom Controls Bar */
-.player-toolbar{display:flex;justify-content:flex-end;align-items:center;margin-top:8px;gap:12px}
-.fs-btn{background:var(--card);color:var(--mute);border:1px solid #ffffff15;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s}
-.fs-btn:hover{border-color:var(--acc);color:var(--text)}
-.fs-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-
 .watch-meta{padding:20px 0;display:flex;flex-direction:column;gap:16px}
 .watch-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .watch-title-row h1{font-size:28px;margin:0;line-height:1.2}
@@ -46,6 +40,7 @@ h1{font-size:clamp(34px,6vw,64px);margin:8px 0;line-height:1}
 .btn{border:0;border-radius:10px;padding:12px 22px;font-weight:700;font-size:15px;cursor:pointer;margin:0 8px 8px 0;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
 .pri{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#1a0e05}
 .sec{background:#ffffff1f;color:var(--text)}
+.ep-select .btn{margin:0;padding:8px 14px;font-size:14px}
 section{padding:6px 4vw}
 h2{font-size:19px;margin:22px 0 10px}
 .row{display:flex;gap:14px;overflow-x:auto;padding:6px 0 14px}
@@ -87,7 +82,7 @@ var CATALOG = [];
 /* Verified working alternate streaming backends with full native fullscreen permission support */
 var SERVERS = [
  { name: "Server 1 (VidSrc CC)", movie: "https://vidsrc.cc/v2/embed/movie/{id}", tv: "https://vidsrc.cc/v2/embed/tv/{id}/{season}/{episode}" },
- { name: "Server 2 (VidSrc Me)", movie: "https://vidsrc.me/embed/movie?tmdb={id}", tv: "https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}" },
+ { name: "Server 2 (VidSrc Me)", movie: "https://vidsrc.me/embed/movie?tmdb={id}", tv: "https://vidsrc.me/embed/tv?tmdb={id}&season={season}&episode={episode}", subs: true },
  { name: "Server 3 (EmbedMaster)", movie: "https://embedmaster.link/movie/{id}", tv: "https://embedmaster.link/tv/{id}/{season}/{episode}" }
 ];
 
@@ -166,13 +161,21 @@ function find(id){return CATALOG.filter(function(x){return x.id==id})[0]}
 function getEmbedUrl(f, season, episode, serverIndex){
  var s = SERVERS[serverIndex || 0];
  var tpl = f.type === "tv" ? s.tv : s.movie;
- return tpl.replace("{id}", f._rid).replace("{season}", season || 1).replace("{episode}", episode || 1);
+ var url = tpl.replace("{id}", f._rid).replace("{season}", season || 1).replace("{episode}", episode || 1);
+ if(subsOn && s.subs) url += (url.indexOf("?") > -1 ? "&" : "?") + "ds_lang=en";
+ return url;
 }
 
 function navigateTo(id){
  var f = find(id);
  if(!f) return;
  location.hash = "#/" + f.type + "/" + f.id;
+}
+
+function currentItem(){
+ var hash = location.hash || "";
+ if(hash.indexOf("#/movie/") !== 0 && hash.indexOf("#/tv/") !== 0) return null;
+ return find(hash.replace("#/movie/", "").replace("#/tv/", ""));
 }
 
 function handleRoute(){
@@ -206,6 +209,75 @@ function fetchTvDetails(f){
   .catch(function(){});
 }
 
+/* ---------- Added functions ---------- */
+
+/* Fullscreen hotkey (F): expands the player box. The player's own built-in
+   fullscreen button (inside the video) works through the iframe's
+   allow="fullscreen" permission set in renderPlayerPage. */
+function toggleFullscreen(){
+ var box = $("playerBox"); if(!box) return;
+ var fs = document.fullscreenElement || document.webkitFullscreenElement;
+ if(fs){
+  (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+ } else {
+  (box.requestFullscreen || box.webkitRequestFullscreen || box.msRequestFullscreen || function(){}).call(box);
+ }
+}
+
+/* Subtitle hotkey (C): best effort. Only works if the embedded player
+   listens for these postMessage commands. */
+var subsOn = false;
+function toggleSubtitles(){
+ /* Servers that accept a default-subtitle URL parameter: toggle it and
+    reload the player. This is the only reliable way to switch subtitles
+    from outside the iframe. */
+ if(SERVERS[curServer] && SERVERS[curServer].subs){
+  subsOn = !subsOn;
+  handleRoute();
+  return;
+ }
+ var fr = document.querySelector("#playerBox iframe");
+ if(!fr || !fr.contentWindow) return;
+ try{
+  var w = fr.contentWindow;
+  w.postMessage({type:"toggleSubtitles"}, "*");
+  w.postMessage({type:"toggleCaptions"}, "*");
+  w.postMessage({type:"command", action:"toggleSubtitles"}, "*");
+  w.postMessage({event:"command", func:"toggleSubtitles"}, "*");
+  w.postMessage(JSON.stringify({event:"command", action:"toggleSubtitles"}), "*");
+  w.postMessage("toggleSubtitles", "*");
+ }catch(e){}
+ /* Hand keyboard focus to the player so its own built-in C shortcut
+    (most players have one) receives the next key press directly. */
+ try{ fr.focus(); }catch(e){}
+}
+
+/* Keeps the dropdowns showing the exact season/episode being watched */
+function syncEpisodeSelects(){
+ var s = $("seSelect"), e = $("epSelect");
+ if(s) s.value = curSeason;
+ if(e) e.value = curEpisode;
+}
+
+function nextEpisode(){
+ var f = currentItem();
+ if(!f || f.type !== "tv") return;
+ var seasons = showDetailsCache[f._rid] || [{season_number: 1, episode_count: 24}];
+ var cur = seasons.filter(function(s){return s.season_number == curSeason})[0];
+ var count = cur ? cur.episode_count : 24;
+ if(curEpisode < count){
+  curEpisode++;
+ } else {
+  var nxt = seasons.filter(function(s){return s.season_number > curSeason})[0];
+  if(!nxt) return;
+  curSeason = nxt.season_number;
+  curEpisode = 1;
+ }
+ handleRoute();
+}
+
+/* ---------- End added functions ---------- */
+
 function renderPlayerPage(f){
  var embedUrl = getEmbedUrl(f, curSeason, curEpisode, curServer);
  
@@ -230,16 +302,14 @@ function renderPlayerPage(f){
   epSelector = '<div class="ep-select">' +
     '<span>Season:</span><select id="seSelect">'+seasonOptions+'</select>' +
     '<span>Episode:</span><select id="epSelect">'+episodeOptions+'</select>' +
+    '<button class="btn sec" id="nextEp">Next Episode ▶</button>' +
   '</div>';
  }
 
  $("app").innerHTML = '<div class="watch-container">' +
   '<div class="server-tabs">'+serverTabsHtml+'</div>' +
   '<div class="player-box" id="playerBox">' +
-   '<iframe src="'+esc(embedUrl)+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen webkitallowfullscreen mozallowfullscreen></iframe>' +
-  '</div>' +
-  '<div class="player-toolbar">' +
-   '<button class="fs-btn" id="fsBtn" title="Maximize Screen"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg> Fullscreen</button>' +
+   '<iframe src="'+esc(embedUrl)+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *" allowfullscreen webkitallowfullscreen mozallowfullscreen></iframe>' +
   '</div>' +
   '<div class="watch-meta">' +
    '<div class="watch-title-row">' +
@@ -251,6 +321,13 @@ function renderPlayerPage(f){
    '<p class="watch-desc">'+esc(f.description || "No description available.")+'</p>' +
   '</div>' +
  '</div>';
+
+ syncEpisodeSelects();
+
+ /* Give the player keyboard focus as soon as it loads, so pressing C
+    reaches the player's own subtitle shortcut without clicking first. */
+ var pf = document.querySelector("#playerBox iframe");
+ if(pf && !(SERVERS[curServer] && SERVERS[curServer].subs)){ pf.addEventListener("load", function(){ try{ pf.focus(); }catch(e){} }); }
 }
 
 function renderCatalog(){
@@ -292,17 +369,8 @@ document.addEventListener("click",function(e){
  if(t.id=="home"){$("q").value="";committed="";view="all";location.hash="#/";return handleRoute()}
  if(t.id=="nh"){$("q").value="";committed="";view="all";location.hash="#/";return handleRoute()}
  if(t.id=="nl"){view="list";location.hash="#/";return handleRoute()}
- 
- /* Fullscreen Button Action */
- if(t.id == "fsBtn" || t.closest("#fsBtn")){
-  var box = $("playerBox");
-  if(box) {
-   if(box.requestFullscreen) box.requestFullscreen();
-   else if(box.webkitRequestFullscreen) box.webkitRequestFullscreen();
-   else if(box.msRequestFullscreen) box.msRequestFullscreen();
-  }
-  return;
- }
+
+ if(t.closest("#nextEp")){nextEpisode();return}
 
  if(a=t.closest("[data-srv]")){
   curServer = parseInt(a.getAttribute("data-srv"), 10);
@@ -316,9 +384,20 @@ document.addEventListener("input",function(e){var id=e.target.id;if(id!="q")retu
  var v=e.target.value;$("q").value=v;
  if(!v.trim()){committed="";hideSug();handleRoute();return}
  suggest(e.target);liveSearch(v)});
-document.addEventListener("keydown",function(e){var id=e.target.id;if(id!="q")return;
- if(e.key=="Enter"){e.preventDefault();commit(e.target.value)}
- if(e.key=="Escape")hideSug()});
+
+document.addEventListener("keydown",function(e){
+ var tag=(e.target.tagName||"").toLowerCase();
+ if(e.target.id=="q"){
+  if(e.key=="Enter"){e.preventDefault();commit(e.target.value)}
+  if(e.key=="Escape")hideSug();
+  return;
+ }
+ if(tag=="input"||tag=="textarea"||tag=="select"||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(!$("playerBox"))return;
+ var k=(e.key||"").toLowerCase(), cd=e.code||"";
+ if(k=="f"||cd=="KeyF"){e.preventDefault();toggleFullscreen()}
+ if(k=="c"||cd=="KeyC"){e.preventDefault();toggleSubtitles()}
+});
 
 loadFeeds();
 </script>
