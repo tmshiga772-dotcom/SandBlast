@@ -140,7 +140,7 @@ function suggest(inp){
  h+='<div class="more">Press Enter to see all results for “'+esc(raw)+'”</div>';
  d.innerHTML=h;d.style.display="block"}
 
-function afterSearch(){handleRoute();if(activeInp&&document.activeElement===activeInp}
+function afterSearch(){handleRoute();if(activeInp&&document.activeElement===activeInp)suggest(activeInp)}
 function commit(v){v=(v||"").trim();committed=v;$("q").value=v;view="all";hideSug();if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();location.hash="#/";handleRoute();liveSearch(v)}
 var tmr;
 function liveSearch(q){clearTimeout(tmr);q=(q||"").trim();if(q.length<2)return;
@@ -379,7 +379,6 @@ document.addEventListener("click",function(e){
   return;
  }
  if(a=t.closest("[data-tog]"))return tog(a.getAttribute("data-tog"));
- if(a=t.id=="home"){$("q").value="";committed="";view="all";location.hash="#/";return handleRoute()}
  if(a=t.closest("[data-id]")){var id=a.getAttribute("data-id");curSeason=1;curEpisode=1;navigateTo(id)}});
 
 document.addEventListener("input",function(e){var id=e.target.id;if(id!="q")return;
