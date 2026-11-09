@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="ppck-ver" content="2fb3ffefab37b531e52aaf640662e020" /> 
 <title>SandBlast</title>
 <style>
 :root{--bg:#09090b;--card:#121215;--text:#f4f4f5;--mute:#a1a1aa;--acc:#f59e0b;--acc2:#d97706;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -325,7 +326,7 @@ function renderPlayerPage(f){
  syncEpisodeSelects();
 
  /* Give the player keyboard focus as soon as it loads, so pressing C
-    reaches the player's own subtitle shortcut without clicking first. */
+    reach the player's own subtitle shortcut without clicking first. */
  var pf = document.querySelector("#playerBox iframe");
  if(pf && !(SERVERS[curServer] && SERVERS[curServer].subs)){ pf.addEventListener("load", function(){ try{ pf.focus(); }catch(e){} }); }
 }
